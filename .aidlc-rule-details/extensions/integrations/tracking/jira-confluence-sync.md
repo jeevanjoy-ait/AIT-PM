@@ -38,8 +38,17 @@ At Code Generation / Build and Test completion, add a comment (`addCommentToJira
 
 ## Part 2: Confluence Publishing
 
-### 2.1 Setup check
-Before the first publish attempt, verify `CONFLUENCE_BASE_URL`, `CONFLUENCE_EMAIL`, and `CONFLUENCE_API_TOKEN` are set in the environment (see [common/integration-setup.md](../../../common/integration-setup.md)). If any are missing, tell the human once and skip Confluence publishing for the rest of this session — do not ask for the token value directly, and never write it to any file, log, or `audit.md` entry.
+### 2.1 Write Method Detection (run once per project, before the first publish)
+
+Confluence write access can come from two places, and which one is available depends on how the person running this workflow has their Atlassian connector configured — detect it, don't assume it:
+
+1. **Probe for MCP write tools.** Search for Confluence write tools exposed by the connected Atlassian MCP server (e.g. `createConfluencePage`, `updateConfluencePage`, comment-write tools). If they're available, this connector already has the right Confluence access.
+2. **Branch on what you find**:
+   - **Found MCP write tools → Write Method = MCP (default).** Use them directly for every publish in this Part — skip the REST/curl path entirely. This is the preferred path whenever it's available: no local credentials to manage, and it's the same connector already handling Jira.
+   - **Not found → tell the human plainly** that their current Atlassian connector only exposes read/search access to Confluence, and ask them to choose:
+     - **A) Fix the connector** — reauthorize with broader scopes in their connector settings, or connect directly to Atlassian's official remote MCP server, then re-run detection. Pause here until they've done this or chosen the other route.
+     - **B) Use the REST API fallback** — configure `CONFLUENCE_BASE_URL`, `CONFLUENCE_EMAIL`, `CONFLUENCE_API_TOKEN`, `CONFLUENCE_SPACE_KEY` per [common/integration-setup.md](../../../common/integration-setup.md), and proceed via the REST mechanics in 2.7. Verify the env vars are actually set before the first publish attempt — do not ask for the token value directly, and never write it to any file, log, or `audit.md` entry.
+3. **Record the outcome** in `aidlc-docs/aidlc-state.md` under `## Integration Configuration` as `Confluence Write Method: MCP` or `Confluence Write Method: REST-API`, so this detection runs once per project, not once per publish. If a publish later fails because the recorded method stopped working (token expired, connector re-scoped), re-run detection and re-ask rather than silently giving up.
 
 ### 2.2 What gets published
 Every markdown file created under `aidlc-docs/inception/`, `aidlc-docs/construction/`, and `aidlc-docs/operations/` gets mirrored as a Confluence page, immediately after that artifact is created — not batched at the end. `aidlc-state.md` and `audit.md` are internal tracking files and are NOT published.
@@ -80,7 +89,10 @@ Before calling the Confluence API, show the human:
 
 Wait for explicit confirmation before publishing. Confirm each page individually rather than batching multiple pages into one confirmation — each is a distinct piece of content going somewhere visible to others.
 
-### 2.6 REST mechanics
+### 2.6 Publish mechanics — MCP path (Write Method = MCP)
+Call the discovered `createConfluencePage` / `updateConfluencePage` tool directly with the space key, title, parent page id (from 2.3), and body content. Check that tool's own declared parameters for the expected body format before calling — it may accept Markdown directly rather than requiring the storage-format conversion in 2.4; only run that conversion if the tool's schema calls for storage format. Everything else in this Part (hierarchy lookup, confirm-before-publish) applies the same way regardless of which path is active.
+
+### 2.7 Publish mechanics — REST fallback (Write Method = REST-API)
 Use Confluence Cloud's REST API via `curl`, authenticating with Basic auth (email + API token) read from the environment. Never inline the token as a literal value outside normal env-var expansion, and never echo it.
 
 Check if the page exists:

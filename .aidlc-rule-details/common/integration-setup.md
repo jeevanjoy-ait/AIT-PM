@@ -6,7 +6,10 @@
 Jira access goes through the already-connected Atlassian MCP tools — no separate credentials needed beyond having that connector authorized for your account (via claude.ai connector settings or `/mcp`). If `createJiraIssue`/`lookupJiraAccountId` calls fail with an auth error, the connector isn't authorized yet.
 
 ## Confluence
-Confluence publishing does NOT go through the MCP connector — it's read/search-only for Confluence. Publishing uses Confluence's REST API directly via `curl`, authenticated with an API token. Set these environment variables (e.g. in your shell profile, or a local `.env.aidlc` file that is git-ignored — never commit them):
+Whether Confluence publishing goes through your MCP connector or needs the REST fallback below depends on how your Atlassian connector is scoped — some connectors expose Confluence write tools (`createConfluencePage`/`updateConfluencePage`), others only expose read/search. The `integrations/tracking` extension detects which one you have automatically (see `jira-confluence-sync.md` Section 2.1) and asks you to choose a path if write tools aren't available:
+- **If your connector has write access**: nothing further to configure — it's used directly, no env vars needed.
+- **If it doesn't, and you'd rather fix the connector**: reauthorize with broader scopes in your connector settings, or connect directly to Atlassian's official remote MCP server, then let the extension re-detect.
+- **If you'd rather use the REST fallback instead**: it publishes via Confluence's REST API directly via `curl`, authenticated with an API token. Set these environment variables (e.g. in your shell profile, or a local `.env.aidlc` file that is git-ignored — never commit them):
 
 | Variable | Value |
 |---|---|
